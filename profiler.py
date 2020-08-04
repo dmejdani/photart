@@ -4,40 +4,59 @@ import numpy as np
 fir_fn = "fir.csv"
 
 
-def normalize_arr(img_arr):
-    min_v = np.min(img_arr)
-    img_arr -= min_v
-    max_v = np.max(img_arr)
-    return img_arr * 255 / max_v
+class Artist:
+
+    def __init__(self, pic_path="_data/profile.jpg", fir_path="fir.csv"):
+        self.pic_path = pic_path
+        self.fir_path = fir_path
+        self.image = Image.open(pic_path)
+        self.array = np.array(self.image)
+        self.fir = np.genfromtxt(fir_path, delimiter="\t")
+
+    def togray(self):
+        assert len(self.array.shape) == 3, "Array not of shape (*, *, 3)"
+        self.array = np.sum(self.array, axis=2) / 3
+        self.update_img(self.array)
+        return self.array
+    
+    def filter(self):
+        assert len(self.array.shape) == 2, "Filtering supported only on 2d array"
+        for row in range(self.array.shape[0]):
+            self.array[row, :] = np.convolve(self.array[row, :], self.fir, "same")
+        for col in range(self.array.shape[1]):
+            self.array[:, col] = np.convolve(self.array[:, col], self.fir, "same")
+        self.array = self.map_layer(self.array)
+        print(np.max(self.array))
+        print(np.min(self.array))
+        self.update_img(self.array)
+    
+    @staticmethod
+    def map_layer(layer, new_min=0, new_max=255):
+        old_min = np.min(layer)
+        print(old_min)
+        old_max = np.max(layer)
+        print(old_max)
+        layer = layer - old_min  # start at zero
+        print(np.min(layer))
+        layer = layer * ((new_max - new_min) / (old_max - old_min))  # scale
+        print(np.min(layer))
+        print(np.max(layer))
+        layer = layer + new_min  # shift to correct range
+        return layer
+
+    def update_img(self, array):
+        self.image = Image.fromarray(array)
+
+    def show(self):
+        self.image.show()
 
 
-# opening file with PIL / Pillow
-img = Image.open("_data/profile.jpg")
-print(img.format, img.size, img.mode)
-
-# convert to numpy array to process easier
-arr = np.array(img)
-print(arr.shape)
-
-# RGB to grayscale image
-gray_arr = np.sum(arr, 2, dtype=np.uint8) / 3
-print(gray_arr.shape)
-
-fir = np.genfromtxt(fir_fn, delimiter="\t")
-# print(fir)
-
-for row in range(gray_arr.shape[0]):
-    gray_arr[row] = np.convolve(gray_arr[row], fir, "same").astype(np.uint8)
-for col in range(gray_arr.shape[1]):
-    gray_arr[:, col] = np.convolve(
-        gray_arr[:, col], fir, "same").astype(np.uint8)
-
-print(arr.dtype)
-print(gray_arr.dtype)
-
-out = arr
-out[:, :, 0] += normalize_arr(gray_arr).astype(np.uint8)
-out[:, :, 0] = out[:, :, 0] / 2
-
-img_g = Image.fromarray(out)
-img_g.show()
+if __name__ == "__main__":
+    artist = Artist()
+    # artist.show()
+    artist.togray()
+    # layer = artist.map_layer(artist.array, 0, 255)
+    # artist.update_img(layer)
+    artist.filter()
+    print(artist.array)
+    artist.show()
