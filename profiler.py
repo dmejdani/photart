@@ -9,7 +9,7 @@ class Artist:
 
     edge_det_kernel = np.array([
         [0, -1,  0],
-        [-1,  4, -1],
+        [-1, 4, -1],
         [0, -1,  0]
     ])
 
