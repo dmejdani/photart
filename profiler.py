@@ -13,6 +13,8 @@ class Artist:
         [0, -1,  0]
     ])
 
+    
+
     def __init__(self, pic_path="_data/profile.jpg", fir_path="fir.csv"):
         self.pic_path = pic_path
         self.fir_path = fir_path
@@ -22,14 +24,8 @@ class Artist:
 
     def get_layer(self, layer):
         self.check_layer_dims(3)
-        if layer == "red":
-            idx = 0
-        elif layer == "green":
-            idx = 1
-        elif layer == "blue":
-            idx = 2
-        else:
-            raise RuntimeError("Layer argument not valid!")
+        colors = {"red": 0, "green": 1, "blue": 2}
+        idx = colors[layer]
         return self.array[:, :, idx]
 
     def togray(self):
@@ -49,10 +45,32 @@ class Artist:
         self.array = self.map_layer(self.array)
         self.update_img(self.array)
 
-    def filter2d(self, layer):
+    def filter2d(self, layer, double_thresholding=False):
         # self.check_layer_dims(2)
-        return convolve2d(
-            layer, self.edge_det_kernel, boundary="symm", mode="same")
+        edges = convolve2d(layer, self.edge_det_kernel, boundary="symm", mode="same")
+
+        if double_thresholding:
+            for row in range(edges.shape[0]):
+                for col in range(edges.shape[1]):
+                    edges[row, col] = 0 if edges[row, col] < 110 else 1
+        
+        return edges
+
+    def down_res(self, layer=[], nr_levels=10):
+        def remap(v):
+            delta = 255 // nr_levels
+            return ((v // delta) + 1) * delta
+
+        if not len(layer):
+            layer = self.array
+        
+        self.check_layer_dims(2, layer)
+
+        for row in range(layer.shape[0]):
+            for col in range(layer.shape[1]):
+                layer[row,col] = remap(layer[row,col])
+
+        return layer
 
     @staticmethod
     def map_layer(layer, new_min=0, new_max=255):
@@ -63,8 +81,8 @@ class Artist:
         layer = layer + new_min  # shift to correct range
         return layer
 
-    def update_img(self, array=None):
-        if array is None:
+    def update_img(self, array=[]):
+        if not len(array):
             array = self.array
         else:
             self.array = array
@@ -78,9 +96,11 @@ class Artist:
     def show(self):
         self.image.show()
 
-    def check_layer_dims(self, n):
+    def check_layer_dims(self, n, array=None):
+        if array is None:
+            array = self.array
         assert len(
-            self.array.shape) == n, f"Operation supported only on {n}d array"
+            array.shape) == n, f"Operation supported only on {n}d array"
 
 
 if __name__ == "__main__":
@@ -89,6 +109,25 @@ if __name__ == "__main__":
     rl = artist.get_layer("red")
     gl = artist.get_layer("green")
     bl = artist.get_layer("blue")
+
+    quantized = {"r": [], "g": [], "b": []}
+    # Comparing the rgb layers
+    for key, value in {"r": rl, "g": gl, "b": bl}.items():
+        quantized[key] = artist.down_res(layer=value, nr_levels=6)
+    
+    edges = {"r": [], "g": [], "b": []}
+    for key, value in quantized.items():
+        edges[key] = artist.filter2d(quantized[key], double_thresholding=True)
+        quantized[key] = artist.map_layer(quantized[key] + edges[key]).astype(np.uint8)
+    
+    for key, value in quantized.items():
+        quantized[key] = np.expand_dims(value, 2)
+
+    rgb_img = np.append(quantized["r"], quantized["g"], axis=2)
+    rgb_img = np.append(rgb_img, quantized["b"], axis=2)
+    rgb_im = Image.fromarray(rgb_img, mode="RGB")
+    rgb_im.save("_data/quantized.jpg")
+    exit()
 
     # edge filtering on each color
     fr, fg, fb = map(artist.filter2d, [rl, gl, bl])
