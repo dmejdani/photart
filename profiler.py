@@ -13,7 +13,13 @@ class Artist:
         [0, -1,  0]
     ])
 
-    
+    gaussian_kernel = 1/159 * np.array([
+        [2,  4,  5,  4, 2],
+        [4,  9, 12,  9, 4],
+        [5, 12, 15, 12, 5],
+        [4,  9, 12,  9, 4],
+        [2,  4,  5,  4, 2]
+    ])
 
     def __init__(self, pic_path="_data/profile.jpg", fir_path="fir.csv"):
         self.pic_path = pic_path
@@ -45,16 +51,16 @@ class Artist:
         self.array = self.map_layer(self.array)
         self.update_img(self.array)
 
-    def filter2d(self, layer, double_thresholding=False):
-        # self.check_layer_dims(2)
-        edges = convolve2d(layer, self.edge_det_kernel, boundary="symm", mode="same")
+    def filter2d(self, layer, filter, double_thresholding=False):
+        self.check_layer_dims(2, layer)
+        filtered = convolve2d(layer, filter, boundary="symm", mode="same")
 
         if double_thresholding:
-            for row in range(edges.shape[0]):
-                for col in range(edges.shape[1]):
-                    edges[row, col] = 0 if edges[row, col] < 110 else 1
-        
-        return edges
+            for row in range(filtered.shape[0]):
+                for col in range(filtered.shape[1]):
+                    filtered[row, col] = 0 if filtered[row, col] < 110 else 1
+
+        return filtered
 
     def down_res(self, layer=[], nr_levels=10):
         def remap(v):
@@ -63,12 +69,12 @@ class Artist:
 
         if not len(layer):
             layer = self.array
-        
+
         self.check_layer_dims(2, layer)
 
         for row in range(layer.shape[0]):
             for col in range(layer.shape[1]):
-                layer[row,col] = remap(layer[row,col])
+                layer[row, col] = remap(layer[row, col])
 
         return layer
 
@@ -113,11 +119,13 @@ if __name__ == "__main__":
     quantized = {"r": [], "g": [], "b": []}
     # Comparing the rgb layers
     for key, value in {"r": rl, "g": gl, "b": bl}.items():
-        quantized[key] = artist.down_res(layer=value, nr_levels=6)
-    
+        quantized[key] = value
+        quantized[key] = artist.filter2d(quantized[key], artist.gaussian_kernel)
+        quantized[key] = artist.down_res(quantized[key], nr_levels=6)
+
     edges = {"r": [], "g": [], "b": []}
     for key, value in quantized.items():
-        edges[key] = artist.filter2d(quantized[key], double_thresholding=True)
+        edges[key] = artist.filter2d(quantized[key], artist.edge_det_kernel)
         quantized[key] = artist.map_layer(quantized[key] + edges[key]).astype(np.uint8)
     
     for key, value in quantized.items():
